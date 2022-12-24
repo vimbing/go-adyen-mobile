@@ -123,12 +123,9 @@ func (c ClientSideEncrypter) DecodeAdyenPublicKey(encodedPublicKey string) (*rsa
 
 func (c ClientSideEncrypter) EncryptWithPublicKey(publicKey *rsa.PublicKey, plaintext []byte) ([]byte, error) {
 	hash := sha256.Sum256(plaintext)
-
 	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, hash[:], nil)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return ciphertext, nil
 }
