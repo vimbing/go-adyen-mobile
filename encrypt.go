@@ -5,18 +5,17 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"strings"
 	"time"
 )
 
 func (c ClientSideEncrypter) GenerateAdyenNonce(name string, pan string, cvc string, expiryMonth string, expiryYear string) (string, error) {
+
 	plainCardData, err := c.GenerateCardDataJson(name, pan, cvc, expiryMonth, expiryYear)
 
 	if err != nil {
@@ -70,8 +69,9 @@ func (c ClientSideEncrypter) GenerateCardDataJson(name string, pan string, cvc s
 }
 
 func (c ClientSideEncrypter) GenerateAESKey() ([]byte, error) {
-	key := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+	key := make([]byte, 256)
+	_, err := rand.Read(key)
+	if err != nil {
 		return nil, err
 	}
 	return key, nil
@@ -79,7 +79,8 @@ func (c ClientSideEncrypter) GenerateAESKey() ([]byte, error) {
 
 func (c ClientSideEncrypter) GenerateNonce() ([]byte, error) {
 	nonce := make([]byte, 12)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	_, err := rand.Read(nonce)
+	if err != nil {
 		return nil, err
 	}
 	return nonce, nil
@@ -103,29 +104,25 @@ func (c ClientSideEncrypter) EncryptWithAESKey(aesKey, nonce, plaintext []byte) 
 func (c ClientSideEncrypter) DecodeAdyenPublicKey(encodedPublicKey string) (*rsa.PublicKey, error) {
 	keyComponents := strings.Split(encodedPublicKey, "|")
 	if len(keyComponents) != 2 {
-		return nil, errors.New("invalid encoded public key")
+		return nil, fmt.Errorf("invalid encoded public key: %s", encodedPublicKey)
 	}
-
 	n, ok := new(big.Int).SetString(keyComponents[0], 16)
 	if !ok {
-		return nil, errors.New("invalid encoded public key")
+		return nil, fmt.Errorf("invalid encoded public key: %s", encodedPublicKey)
 	}
-
 	e, ok := new(big.Int).SetString(keyComponents[1], 16)
 	if !ok {
-		return nil, errors.New("invalid encoded public key")
+		return nil, fmt.Errorf("invalid encoded public key: %s", encodedPublicKey)
 	}
-
 	publicNumber := &rsa.PublicKey{N: n, E: int(e.Int64())}
-
 	return publicNumber, nil
 }
 
 func (c ClientSideEncrypter) EncryptWithPublicKey(publicKey *rsa.PublicKey, plaintext []byte) ([]byte, error) {
-	hash := sha256.Sum256(plaintext)
-	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, hash[:], nil)
+	hash := sha512.New()
+	ciphertext, err := rsa.EncryptOAEP(hash, rand.Reader, publicKey, plaintext, nil)
 	if err != nil {
 		return nil, err
 	}
-	return ciphertext, nil
+	return ciphertext, err
 }
